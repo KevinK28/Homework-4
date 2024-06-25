@@ -1,0 +1,271 @@
+---
+title: "ST 558 - Homework 4"
+author: "Kevin Krupa"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+editor: visual
+execute:
+  error: true
+---
+
+# Task 1: Conceptual Questions
+
+1.  What is the purpose of the lapply() function? What is the equivalent purrr function?
+
+    `The purpose of the lapply() function is to apply functions to lists. This    function grants us the flexibility and conciseness to obtain the result of another function across multiple elements of a list. THe equivalent purrr function would be the map() function.`
+
+2.  Suppose we have a list called my_list. Each element of the list is a numeric data frame (all columns are numeric). We want use lapply() to run the code cor(numeric_matrix, method = "kendall") on each element of the list. Write code to do this below! (I'm really trying to ask you how you specify method = "kendall" when calling lapply())
+
+    `lapply(X = my_list, FUN = cor, method = "kendall")`
+
+3.  What are two advantages of using purrr functions instead of the BaseR apply family?
+
+    1.  `Provides a tidyverse alternative, which gives us more consistency and helper functions.`
+
+    2.  `They give us a shorthand way to make anonymous functions`
+
+4.  What is a side-effect function?
+
+    `A side-effect function is one that performs something other than just returning a value. This can include printing output, creating plots, etc.`
+
+5.  Why can you name a variable sd in a function and not cause any issues with the sd function?
+
+    `This is because we define the variable sd inside of our function, where it will be local to only that function and will shadow that global sd function`
+
+# Task 2: Writing R Functions
+
+In this task, we will be writing our own R function that outputs the Root Mean Square Error (RMSE) to evaluate predictions. The function will take in a vector of responses and a vector of predictions, and will allow for an additional argument that denotes if we need to remove missing values.
+
+```{r}
+
+getRMSE <- function(response, prediction, ...) {
+  if (!is.vector(response) | !is.vector(prediction)) {
+    stop("Arguments must be vectors")
+  }
+  if (length(response) != length(prediction)) {
+    stop("Argument vectors must be of equal length")
+  }
+  
+  squared_diff <- (response - prediction)^2
+  rmse_sq      <- mean(squared_diff, ...)
+  rmse         <- sqrt(rmse_sq)
+  
+  return(paste("Root Mean Square Error:", rmse))
+}
+```
+
+Now that we have created our function, we can test it
+
+```{r}
+#Generate Data
+set.seed(10)
+n <- 100
+x <- runif(n)
+resp <- 3 + 10*x + rnorm(n)
+pred <- predict(lm(resp ~ x), data.frame(x))
+
+#Function Result
+result <- getRMSE(response = resp, prediction = pred)
+result
+
+#Hard coded result
+test_diff <- (resp - pred)^2
+test_rmse_sq      <- mean(test_diff)
+test_rmse         <- sqrt(test_rmse_sq)
+test_rmse
+```
+
+Now that we know the functionality of our function is correct, we can then examine the flexibility of the additional argument to work with missing values.
+
+```{r}
+#Assign missing values to two of the values in response vector
+resp[c(4,10)] <- NA_real_
+
+#Test function with, and without specifying missing value argument
+getRMSE(response = resp, prediction = pred)
+getRMSE(response = resp, prediction = pred, na.rm = TRUE)
+
+```
+
+The next function we will write will be to obtain the Mean Absolute Deviation (MAE). This will follow the same specifications (arguments) as the RMSE function.
+
+```{r}
+
+getMAE <- function(response, prediction, ...) {
+  
+  if (!is.vector(response) | !is.vector(prediction)) {
+    stop("Arguments must be vectors")
+ 
+  }
+  if (length(response) != length(prediction)) {
+    stop("Argument vectors must be of equal length")
+  }
+  
+  abs_diff <- abs(response - prediction)
+  MAE <- mean(abs_diff, ...)
+  
+  return(paste("Mean Absolute Deviation:", MAE))
+}
+```
+
+We have created the function, now let us make sure that it works
+
+```{r}
+#Generate data
+set.seed(10)
+n <- 100
+x <- runif(n)
+resp <- 3 + 10*x + rnorm(n)
+pred <- predict(lm(resp ~ x), data.frame(x))
+
+#Function result
+result <- getMAE(response = resp, prediction = pred)
+result
+
+#Hard coded result
+test <- mean(abs(resp - pred))
+test
+```
+
+Once again, we know that our function works. Now, let us check to see how the inclusion of na values will affect this function.
+
+```{r}
+#Assign missing values to two of the values in response vector
+resp[c(4,10)] <- NA_real_
+
+#Test function with, and without specifying missing value argument
+getMAE(response = resp, prediction = pred)
+getMAE(response = resp, prediction = pred, na.rm = TRUE)
+
+#Make sure it matches hard coded result
+test_pred <- pred[-c(4,10)]
+test_resp <- resp[-c(4,10)]
+test <- mean(abs(test_resp - test_pred))
+test
+
+```
+
+The next goal of this task is to create a wrapper function that has the ability to output both or either of the two metrics above. The function will include the two functions written above, as well as make sure that two numeric vectors have been passed (result in error if not).
+
+```{r}
+
+metric_function <- function(response, prediction, metric = "Both", ...) {
+  #Make sure it is an atomic, numeric vector
+  if(!is.numeric(response) | !is.numeric(prediction) | !is.atomic(response) |
+     !is.atomic(prediction) | !is.vector(response) | !is.vector(prediction)) {
+    stop("Reponse and Prediction arguments must be atomic vectors")
+    
+  }
+  #Make sure metric argument is correct
+  if (metric != "Both" & metric != "MAE" & metric != "RMSE"){
+    stop("Metric argument must be one of these character strings: Both, MAE,
+            or RMSE")
+  }
+  
+  if (metric == "Both"){
+    #Return both metrics if both is specified
+    rmse <- getRMSE(response, prediction, ...)
+    mae  <- getMAE(response, prediction, ...)
+    return(c(rmse, mae))
+  } else if (metric == "MAE") {
+    #Return only MAE if MAE is specified
+    mae <- getMAE(response, prediction, ...)
+    return(mae)
+  } else if (metric == "RMSE") {
+    #Return only RMSE if RMSE is specified
+    rmse <- getRMSE(response, prediction, ...)
+    return(rmse)
+  }
+  
+}
+```
+
+We have created our wrapper function, now let us check to see if it works for different specficiations of the metric argument.
+
+```{r}
+set.seed(10)
+n <- 100
+x <- runif(n)
+resp <- 3 + 10*x + rnorm(n)
+pred <- predict(lm(resp ~ x), data.frame(x))
+
+metric_function(resp, pred, metric = "MAE")
+metric_function(resp, pred, metric = "RMSE")
+metric_function(resp, pred, metric = "Both")
+```
+
+We see that our function indeed works, now let us check it's functionality when dealing with missing values.
+
+```{r}
+#Assign missing values to two of the values in response vector
+resp[c(4,10)] <- NA_real_
+
+metric_function(resp, pred, metric = "MAE")
+metric_function(resp, pred, metric = "RMSE")
+metric_function(resp, pred, metric = "Both")
+
+metric_function(resp, pred, metric = "MAE", na.rm = TRUE)
+metric_function(resp, pred, metric = "RMSE", na.rm = TRUE)
+metric_function(resp, pred, metric = "Both", na.rm = TRUE)
+```
+
+Now that we know it can handle missing data, let us see if the errors are returned if we pass it something other than atomic, numeric vectors.
+
+```{r}
+metric_function(iris, pred)
+```
+
+# Task 3: Querying an API and a Tidy-Style Function
+
+In this task, we will be connecting to the news API and finding information about a topic that I am interested in that has been in the news. We will then take that information, and parse it into a data frame that has the actual article information in it (First column should be a list column). Finally, we will write a function that allows the user to query this API. Inputs of this function should be the title/subject to search for (string), a time period to search from (string), and an API key.
+
+First off, let us find a topic we are interested in and put all articles into a data frame.
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+#Need to load in packages
+library(httr)
+library(jsonlite)
+library(tidyverse)
+```
+
+```{r}
+URL_news <- "https://newsapi.org/v2/everything?q=tesla&from=2024-05-25&apiKey=de938e3dab06485f95610e066abe3773"
+
+data <- httr::GET(URL_news)
+
+parsed <- fromJSON(rawToChar(data$content))
+data <- as_tibble(parsed$articles)
+data
+```
+
+Now, we can write a function that will allow the user to input their own topic of interest and the farthest date to look from until the present, as well as an API key.
+
+```{r}
+API_function <- function(topic, time, apikey){
+  if(!is.character(topic) | !is.character(time) | !is.character(apikey)) {
+    stop("Arguments must be a character string")
+  }
+
+  url <- paste0("https://newsapi.org/v2/everything?q=", topic, "&from=", time,
+               "&apiKey=", apikey)
+  
+  data <- httr::GET(url)
+  parsed <- fromJSON(rawToChar(data$content))
+  data <- as_tibble(parsed$articles)
+  return(data)
+  
+}
+```
+
+Now, we will run our function twice, to make sure it works.
+
+```{r}
+API_function(topic = "tesla", time = "2024-05-25",
+             apikey = "de938e3dab06485f95610e066abe3773")
+
+API_function(topic = "apple", time = "2024-06-10",
+             apikey = "de938e3dab06485f95610e066abe3773")
+```
+
